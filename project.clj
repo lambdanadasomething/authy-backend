@@ -17,8 +17,10 @@
                  [compojure "1.6.2"]
                  [ring "1.8.2"]
                  [clojusc/ring-redis-session "3.3.0-SNAPSHOT"]
-                 [metosin/reitit "0.5.6"]]
+                 [metosin/reitit "0.5.6"]
+                 [cprop "0.1.17"]]
   :main ^:skip-aot authy-backend.app
   :target-path "target/%s"
-  :profiles {:uberjar {:aot :all
+  :profiles {:dev {:jvm-opts ["-Dconf=resources/config.dev.edn"]}
+             :uberjar {:aot :all
                        :jvm-opts ["-Dclojure.compiler.direct-linking=true"]}})
