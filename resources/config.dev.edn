@@ -1,4 +1,9 @@
 {
  :test-password "answeris42"
  :second "foobar"
+ :test-dyn #dyn/prop [:refa]
+ :refa "hello"
+ :db-conn {:host "localhost"
+           :port 5432
+           :password #dyn/prop [:secrets/db-password]}
 }

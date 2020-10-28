@@ -10,12 +10,43 @@
             ;[compojure.core :refer :all]
             ;[compojure.route :as route]
             [ring.middleware.session :as ring-session]
-            [ring.redis.session :refer [redis-store]]))
+            [ring.redis.session :refer [redis-store]]
+            [cprop.core :refer [load-config]]
+            [com.walmartlabs.dyn-edn :as dyn-edn]))
 
 (def rconn {:pool {}
             :spec {:host "127.0.0.1"
                    :port 6379
                    :timeout-ms 5000}})
+
+
+(defn test-fn [x]
+  x)
+
+;(def conf (load-config))
+
+;conf
+;*data-readers*
+
+;; What a hack... Ya I'm nuts
+
+(comment
+  (def initial-conf
+  (binding [*data-readers* (merge *data-readers* (dyn-edn/readers {}) {'dyn/prop #'authy-backend.core/test-fn})]
+    (load-config)))
+
+(binding [*data-readers* (merge *data-readers* (dyn-edn/readers initial-conf))]
+  (load-config)))
+
+(defn load-config-resolve-ref [secret-file-path]
+  (let [initial-conf (binding 
+                      [*data-readers* (merge *data-readers*
+                                             (dyn-edn/readers {})
+                                             {'dyn/prop #'authy-backend.core/test-fn})]
+                       (load-config :resource secret-file-path))]
+    (binding [*data-readers* (merge *data-readers* (dyn-edn/readers initial-conf))]
+      (load-config))))
+
 
 
 (comment
