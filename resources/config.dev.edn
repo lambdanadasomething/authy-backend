@@ -6,4 +6,32 @@
  :db-conn {:host "localhost"
            :port 5432
            :password #dyn/prop [:secrets/db-password]}
+ :infra {
+         :crux {:crux/document-store {:crux/module "crux.jdbc/->document-store"
+                                      :connection-pool {:dialect {:crux/module "crux.jdbc.psql/->dialect"}
+                                                        :pool-opts {}
+                                                        :db-spec {:dbtype "postgresql"
+                                                                  :host "172.30.2.10"
+                                                                  :port 32448
+                                                                  :dbname "cruxtest"
+                                                                  :user "cruxadm"
+                                                                  :password #dyn/prop [:secrets/postgres-password]}}}
+                :crux/index-store {:kv-store {:crux/module "crux.rocksdb/->kv-store"
+                                              :db-dir "/tmp/crux-rocksdb"}}
+                :crux/tx-log {:crux/module "crux.kafka/->tx-log"
+                              :kafka-config {:bootstrap-servers "172.30.2.10:30128"}
+                              :tx-topic-opts {:topic-name "crux-transaction-log"}
+                              :poll-wait-duration "PT1S"}}
+         :redis {:pool {}
+                 :spec {:host "127.0.0.1"
+                        :port 6379
+                        :timeout-ms 5000}}
+         :rabbitmq {:host "localhost" 
+                    :port 5672 
+                    :username "authy-agent" 
+                    :vhost "/authy" 
+                    :password #dyn/prop [:secrets/rabbitmq-password]}
+         :web-server {:port  7070
+                      :host  "172.30.0.22"
+                      :join? false}}
 }

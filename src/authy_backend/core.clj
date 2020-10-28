@@ -14,10 +14,7 @@
             [cprop.core :refer [load-config]]
             [com.walmartlabs.dyn-edn :as dyn-edn]))
 
-(def rconn {:pool {}
-            :spec {:host "127.0.0.1"
-                   :port 6379
-                   :timeout-ms 5000}})
+
 
 
 (defn test-fn [x]
@@ -47,7 +44,11 @@
     (binding [*data-readers* (merge *data-readers* (dyn-edn/readers initial-conf))]
       (load-config))))
 
+(def allconfs (load-config-resolve-ref "secrets.dev.edn"))
 
+(def rconn (get-in allconfs [:infra :redis]))
+
+;(def node (crux/start-node (get-in allconfs [:infra :crux])))
 
 (comment
   (defroutes my-routes
@@ -142,9 +143,7 @@
                                                             :prefix "authy-test1"})}]]}))
 
 
-(def server (run-jetty #'my-app {:port  7070
-                                 :host  "172.30.0.22"
-                                 :join? false}))
+(def server (run-jetty #'my-app (get-in allconfs [:infra :web-server])))
 (defn restart [s]
   (do
     (.stop s)
@@ -153,23 +152,7 @@
 (restart server)
 (.stop server)
 
-(def myconf
-  {:crux/document-store {:crux/module 'crux.jdbc/->document-store
-                         :connection-pool {:dialect {:crux/module 'crux.jdbc.psql/->dialect}
-                                           :pool-opts {}
-                                           :db-spec {:dbtype "postgresql"
-                                                     :host "172.30.2.10"
-                                                     :port 32448
-                                                     :dbname "cruxtest"
-                                                     :user "cruxadm"
-                                                     :password "<redacted>"}}}
-   :crux/index-store {:kv-store {:crux/module 'crux.rocksdb/->kv-store
-                                 :db-dir (io/file "/tmp/crux-rocksdb")}}
-   :crux/tx-log {:crux/module 'crux.kafka/->tx-log
-                 :kafka-config {:bootstrap-servers "172.30.2.10:30128"}
-                 :tx-topic-opts {:topic-name "crux-transaction-log"}
-                 :poll-wait-duration "PT1S"}})
-
+;(io/file "/tmp/crux-rocksdb")
 ;(def node (crux/start-node myconf))
 (def node {})
 
@@ -206,4 +189,8 @@
   (crux/q (crux/db node) '{:find [(eql/project ?e [*])]
                          :where [[?e :crux.db/id _]]})
 )
+
+(defn find-user [node type id]
+  (crux/entity (crux/db node) {:db-type :user, :ident-type type, :id id}))
+
 ;(.close node)
