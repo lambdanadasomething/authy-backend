@@ -13,7 +13,8 @@
             [ring.redis.session :refer [redis-store]]
             [cprop.core :refer [load-config]]
             [com.walmartlabs.dyn-edn :as dyn-edn]
-            [clojure.edn :as edn]))
+            [clojure.edn :as edn]
+            [ring.middleware.cors :refer [wrap-cors]]))
 
 
 
@@ -129,6 +130,20 @@
   (let [test-id (:path-params (:reitit.core/match req))]
     (html-ok (str "My path: " test-id))))
 
+(defn cors-tmp [handler]
+  (wrap-cors handler
+   :access-control-allow-origin [#"http://172.30.0.22:8280/"]
+   :access-control-allow-methods [:get :put :post :delete]))
+
+(defn wrap-cors-header
+  "Allow requests from all origins"
+  [handler]
+  (fn [request]
+    (let [response (handler request)]
+      (update-in response
+                 [:headers "Access-Control-Allow-Origin"]
+                 (fn [_] "*")))))
+
 (def router
   (ring/router
    [
@@ -138,7 +153,8 @@
                 :post set-user}]
     ["/test/:test-id" test-path]
     ["/authy"
-     ["/check-user-availability" {:get check-user}]]]))
+     ["/check-user-availability" {:middleware [cors-tmp wrap-cors-header]
+                                  :get check-user}]]]))
 
 
 (def my-app
