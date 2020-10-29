@@ -12,7 +12,8 @@
             [ring.middleware.session :as ring-session]
             [ring.redis.session :refer [redis-store]]
             [cprop.core :refer [load-config]]
-            [com.walmartlabs.dyn-edn :as dyn-edn]))
+            [com.walmartlabs.dyn-edn :as dyn-edn]
+            [clojure.edn :as edn]))
 
 
 
@@ -48,7 +49,7 @@
 
 (def rconn (get-in allconfs [:infra :redis]))
 
-;(def node (crux/start-node (get-in allconfs [:infra :crux])))
+(def node (crux/start-node (get-in allconfs [:infra :crux])))
 
 (comment
   (defroutes my-routes
@@ -82,6 +83,12 @@
       (response/response)
       (response/content-type "text/html")))
 
+(defn edn-ok [body]
+  (-> body
+      (prn-str)
+      (response/response)
+      (response/content-type "application/edn")))
+
 (defn home [req]
   (html-ok "<h1>Hello World!</h1>"))
 
@@ -104,6 +111,11 @@
     (println req)
     (handler req)))
 
+(defn check-user [req]
+  (let [userid (get (:query-params req) "userid")
+        available? (nil? (find-user node :id userid))]
+    (edn-ok {:available? available?})))
+
 (comment
   (def router
   (r/router
@@ -124,7 +136,9 @@
                     :get diagnostic}]
     ["/session" {:get get-user
                 :post set-user}]
-    ["/test/:test-id" test-path]]))
+    ["/test/:test-id" test-path]
+    ["/authy"
+     ["/check-user-availability" {:get check-user}]]]))
 
 
 (def my-app
@@ -165,7 +179,7 @@
 (hashers/verify "secretpassword" testhash)
 
 
-(defn create-user! [user opt]
+(defn create-user! [node user opt]
   (let [{:keys [id email ident-type password]} user
         uid (case ident-type
               :id    id
@@ -182,8 +196,11 @@
                      :user.credential/password (hashers/derive password 
                                                                {:alg :bcrypt+sha512})}]])))
 
-;(create-user! {:id "mary" :email "foo@bar.com" :ident-type :id :password "superhero123"} {})
-;(create-user! {:id "whatever" :email "null@dev.local" :ident-type :email :password "fj2uEVk"} {})
+;(create-user! node {:id "mary" :email "foo@bar.com" :ident-type :id :password "superhero123"} {})
+;(create-user! node {:id "whatever" :email "null@dev.local" :ident-type :email :password "fj2uEVk"} {})
+;(create-user! node {:id "lester" :email "simpsonfamily@test.local" :ident-type :id :password "kWxO372Nm"} {})
+;(create-user! node {:id "lester2" :email "simpsonfamily2@test.local" :ident-type :id :password "kWxO372Nm"} {})
+;(create-user! node {:id "notfound404" :email "notexists@test.local" :ident-type :id :password "kWxO372Nm"} {})
 
 (comment
   (crux/q (crux/db node) '{:find [(eql/project ?e [*])]
