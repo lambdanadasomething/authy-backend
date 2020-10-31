@@ -14,10 +14,24 @@
             [cprop.core :refer [load-config]]
             [com.walmartlabs.dyn-edn :as dyn-edn]
             [clojure.edn :as edn]
-            [ring.middleware.cors :refer [wrap-cors]]))
+            [ring.middleware.cors :refer [wrap-cors]]
+            [one-time.core :as ot]
+            [one-time.uri  :as oturi]))
+
+;; Section - HOTP/TOTP
+
+(def secret-key (ot/generate-secret-key))
+
+(ot/get-totp-token secret-key)
+
+(def current-token (ot/get-totp-token secret-key))
+(ot/is-valid-totp-token? current-token secret-key)
+;(Thread/sleep 30000)
+
+(oturi/totp-uri {:label "authy-dev" :user "user@email.com" :secret secret-key})
 
 
-
+;; End section - HOTP/TOTP
 
 (defn test-fn [x]
   x)
@@ -28,14 +42,6 @@
 ;*data-readers*
 
 ;; What a hack... Ya I'm nuts
-
-(comment
-  (def initial-conf
-  (binding [*data-readers* (merge *data-readers* (dyn-edn/readers {}) {'dyn/prop #'authy-backend.core/test-fn})]
-    (load-config)))
-
-(binding [*data-readers* (merge *data-readers* (dyn-edn/readers initial-conf))]
-  (load-config)))
 
 (defn load-config-resolve-ref [secret-file-path]
   (let [initial-conf (binding 
@@ -52,30 +58,40 @@
 
 (def node (crux/start-node (get-in allconfs [:infra :crux])))
 
-(comment
-  (defroutes my-routes
-  (GET "/" [] "<h1>Hello World Bye</h1>")
-  (GET "/diagnostic" req 
-    (do
-      (println req)
-      (str (format "<ul><li>Session Key: %s</li><li>Session Data: %s</li></ul>"
-                   (:session/key req "None") (pr-str (:session req))) 
-           "<p>Diagnostic printed.</p>")))
-  (GET "/user" {{:keys [user-id]} :session}
-    (str "The current user is " user-id))
-  (GET "/test" [] {:session {:user-id "Sam"}
-                   :status 200
-                   :headers {"Content-Type" "text/html"}
-                   :body "OK"})
-  (route/not-found "<h1>Page not found</h1>")))
+;; Section - DB
+(defn create-user! [node user opt]
+  (let [{:keys [id email ident-type password]} user
+        uid (case ident-type
+              :id    id
+              :email email
+              email)
+        crux-id {:db-type :user, :ident-type ident-type, :id uid}]
+    (crux/submit-tx
+     node
+     [[:crux.tx/match crux-id nil]
+      [:crux.tx/put {:crux.db/id crux-id
+                     :user/id id
+                     :user/email email
+                     :user/lifecycle-state :state/init
+                     :user.credential/password (hashers/derive password
+                                                               {:alg :bcrypt+sha512})}]])))
+
+;(create-user! node {:id "mary" :email "foo@bar.com" :ident-type :id :password "superhero123"} {})
+;(create-user! node {:id "whatever" :email "null@dev.local" :ident-type :email :password "fj2uEVk"} {})
+;(create-user! node {:id "lester" :email "simpsonfamily@test.local" :ident-type :id :password "kWxO372Nm"} {})
+;(create-user! node {:id "lester2" :email "simpsonfamily2@test.local" :ident-type :id :password "kWxO372Nm"} {})
+;(create-user! node {:id "notfound404" :email "notexists@test.local" :ident-type :id :password "kWxO372Nm"} {})
 
 (comment
-  (def my-app
-  (-> my-routes
-      (ring-session/wrap-session {:store (redis-store rconn {:expire-secs (* 60 10)
-                                                             :reset-on-read true
-                                                             :prefix "authy-test1"})})))
-)
+  (crux/q (crux/db node) '{:find [(eql/project ?e [*])]
+                           :where [[?e :crux.db/id _]]}))
+
+(defn find-user [node type id]
+  (crux/entity (crux/db node) {:db-type :user, :ident-type type, :id id}))
+
+;(.close node)
+
+;; End section - DB
 
 ;; Test reitit
 
@@ -117,14 +133,6 @@
         available? (nil? (find-user node :id userid))]
     (edn-ok {:available? available?})))
 
-(comment
-  (def router
-  (r/router
-   ["/" {:get home}
-    ["/diagnostic" {:get diagnostic}]
-    ["/session"
-     ["/set" {:post 1}]
-     ["/get" {:get 1}]]])))
 
 (defn test-path [req]
   (let [test-id (:path-params (:reitit.core/match req))]
@@ -195,35 +203,3 @@
 (hashers/verify "secretpassword" testhash)
 
 
-(defn create-user! [node user opt]
-  (let [{:keys [id email ident-type password]} user
-        uid (case ident-type
-              :id    id
-              :email email
-              email)
-        crux-id {:db-type :user, :ident-type ident-type, :id uid}]
-    (crux/submit-tx 
-     node 
-     [[:crux.tx/match crux-id nil]
-      [:crux.tx/put {:crux.db/id crux-id
-                     :user/id id
-                     :user/email email
-                     :user/lifecycle-state :state/init
-                     :user.credential/password (hashers/derive password 
-                                                               {:alg :bcrypt+sha512})}]])))
-
-;(create-user! node {:id "mary" :email "foo@bar.com" :ident-type :id :password "superhero123"} {})
-;(create-user! node {:id "whatever" :email "null@dev.local" :ident-type :email :password "fj2uEVk"} {})
-;(create-user! node {:id "lester" :email "simpsonfamily@test.local" :ident-type :id :password "kWxO372Nm"} {})
-;(create-user! node {:id "lester2" :email "simpsonfamily2@test.local" :ident-type :id :password "kWxO372Nm"} {})
-;(create-user! node {:id "notfound404" :email "notexists@test.local" :ident-type :id :password "kWxO372Nm"} {})
-
-(comment
-  (crux/q (crux/db node) '{:find [(eql/project ?e [*])]
-                         :where [[?e :crux.db/id _]]})
-)
-
-(defn find-user [node type id]
-  (crux/entity (crux/db node) {:db-type :user, :ident-type type, :id id}))
-
-;(.close node)

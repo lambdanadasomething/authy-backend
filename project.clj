@@ -20,7 +20,8 @@
                  [metosin/reitit "0.5.6"]
                  [cprop "0.1.17"]
                  [com.walmartlabs/dyn-edn "0.2.0"]
-                 [ring-cors "0.1.13"]]
+                 [ring-cors "0.1.13"]
+                 [one-time "0.7.0"]]
   :main ^:skip-aot authy-backend.app
   :target-path "target/%s"
   :profiles {:dev {:jvm-opts ["-Dconf=resources/config.dev.edn"]}
