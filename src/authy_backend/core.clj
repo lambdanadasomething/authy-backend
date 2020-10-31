@@ -59,6 +59,20 @@
 (def node (crux/start-node (get-in allconfs [:infra :crux])))
 
 ;; Section - DB
+
+; Trans fn
+(comment
+  (crux/submit-tx node 
+                [[:crux.tx/put 
+                  {:crux.db/id :basic/merge
+                   ;; note that the function body is quoted.
+                   :crux.db/fn '(fn [ctx eid m]
+                                  (let [db (crux.api/db ctx)
+                                        entity (crux.api/entity db eid)]
+                                    [[:crux.tx/put (merge entity m)]]))}]]))
+;;Example use
+;;(crux/submit-tx node [[:crux.tx/fn :basic/merge "testing_68241" {:meta true :name "Hey man this"}]])
+
 (defn create-user! [node user opt]
   (let [{:keys [id email ident-type password]} user
         uid (case ident-type
@@ -88,6 +102,37 @@
 
 (defn find-user [node type id]
   (crux/entity (crux/db node) {:db-type :user, :ident-type type, :id id}))
+
+(defn set-mfa [node type id mfa]
+  (crux/submit-tx node [[:crux.tx/fn :basic/merge {:db-type :user, :ident-type type, :id id}
+                         {:user.credential/mfa mfa}]]))
+
+;; mfa temp schema:
+;; 
+;; {:enabled? true
+;;  :type :goog-authenticator
+;;  :secret-key "HS72CK19LDO"}
+;; {:enabled? false}
+
+(defn has-mfa? [mfa]
+  (and (not (nil? mfa))
+       (:enabled? mfa)))
+
+;; (has-mfa? nil) => false
+;; (has-mfa? {:enabled? false}) => false
+;; (has-mfa? {:enabled? true}) => true
+
+
+; Currently hardcode googel authenticator as mfa type (so no side effect needed yet)
+(defn naive-login [node type id password]
+  (let [{password-hash :user.credential/password
+         mfa :user.credential/mfa
+         :as user} (find-user node type id)]
+    (cond 
+      (nil? user) {:success? false :reason :user-not-found}
+      (not (:valid (hashers/verify password password-hash))) {:success? false :reason :incorrect-password}
+      (not (has-mfa? mfa)) {:success? true :need-mfa? false}
+      true {:success? true :need-mfa? true :mfa (:type mfa)})))
 
 ;(.close node)
 

@@ -43,3 +43,36 @@
        ["/set" {:post 1}]
        ["/get" {:get 1}]]])))
 
+(crux/submit-tx node
+                [[:crux.tx/put
+                  {:crux.db/id "testing_123"
+                   :name "Hey man"
+                   :linked-docs ["testing_41" "testing_56"]}]])
+
+(crux/submit-tx node
+                [[:crux.tx/put
+                  {:crux.db/id "testing_41"
+                   :subitem "Test A"}]
+                 [:crux.tx/put
+                  {:crux.db/id "testing_56"
+                   :subitem "Test B"}]])
+
+(crux/q (crux/db node)
+        '{:find [?n ?s]
+          :where [[?e :crux.db/id "testing_123"]
+                  [?e :name ?n]
+                  [?e :linked-docs ?el]
+                  [?el :subitem ?s]]})
+
+(crux/q (crux/db node)
+        '{:find [(eql/project ?e [:name {:linked-docs [:subitem]}])]
+          :where [[?e :crux.db/id "testing_123"]]})
+
+(crux/submit-tx node
+                [[:crux.tx/put
+                  {:crux.db/id "testing_68241"
+                   :name "Hey man"
+                   :linked-docs [{:crux.db/id "testing_81732"
+                                  :subitem "Oh well"}
+                                 {:crux.db/id "testing_90375"
+                                  :subitem "What the?"}]}]])
