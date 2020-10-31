@@ -178,6 +178,20 @@
         available? (nil? (find-user node :id userid))]
     (edn-ok {:available? available?})))
 
+(defn wrap-body-edn [handler]
+  (fn [req]
+    (let [body (edn/read-string (slurp (clojure.java.io/reader (:body req))))]
+      (handler (assoc req :body body)))))
+
+(defn user-login [req]
+  (let [{:keys [id password]} (:body req)]
+    (edn-ok (naive-login node :id id password))))
+(defn mfa-verify [req]
+  (let [{:keys [id totp-code]} (:body req)
+        {mfa :user.credential/mfa} (find-user node :id id)
+        valid-token? (ot/is-valid-totp-token? totp-code (:secret-key mfa))]
+    (edn-ok {:result valid-token?})))
+
 
 (defn test-path [req]
   (let [test-id (:path-params (:reitit.core/match req))]
@@ -205,9 +219,10 @@
     ["/session" {:get get-user
                 :post set-user}]
     ["/test/:test-id" test-path]
-    ["/authy"
-     ["/check-user-availability" {:middleware [cors-tmp wrap-cors-header]
-                                  :get check-user}]]]))
+    ["/authy" {:middleware [cors-tmp wrap-cors-header wrap-body-edn]}
+     ["/check-user-availability" {:get check-user}]
+     ["/login" {:post user-login}]
+     ["/mfa-verify" {:post mfa-verify}]]]))
 
 
 (def my-app
