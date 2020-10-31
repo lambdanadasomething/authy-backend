@@ -199,17 +199,18 @@
 
 (defn cors-tmp [handler]
   (wrap-cors handler
-   :access-control-allow-origin [#"http://172.30.0.22:8280/"]
-   :access-control-allow-methods [:get :put :post :delete]))
+             :access-control-allow-origin [#"http://172.30.0.22:8280/"]
+             :access-control-allow-methods [:get :put :post :delete]
+             :access-control-allow-headers [:content-type]))
 
 (defn wrap-cors-header
   "Allow requests from all origins"
   [handler]
   (fn [request]
     (let [response (handler request)]
-      (update-in response
-                 [:headers "Access-Control-Allow-Origin"]
-                 (fn [_] "*")))))
+      (-> response
+          (update-in [:headers "Access-Control-Allow-Origin"] (fn [_] "*"))
+          (update-in [:headers "Access-Control-Allow-Headers"] (fn [_] "Content-Type"))))))
 
 (def router
   (ring/router
